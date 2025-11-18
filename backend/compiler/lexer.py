@@ -1,11 +1,5 @@
-"""
-Lexer for the mini compiler using PLY (Python Lex-Yacc)
-Tokenizes input source code into tokens
-"""
-
 import ply.lex as lex
 
-# List of token names
 tokens = (
     'NUMBER',
     'PLUS',
@@ -33,7 +27,6 @@ tokens = (
     'PRINT',
 )
 
-# Reserved words
 reserved = {
     'let': 'LET',
     'if': 'IF',
@@ -42,7 +35,6 @@ reserved = {
     'print': 'PRINT',
 }
 
-# Regular expression rules for simple tokens
 t_PLUS    = r'\+'
 t_MINUS   = r'-'
 t_TIMES   = r'\*'
@@ -61,45 +53,34 @@ t_GE      = r'>='
 t_LT      = r'<'
 t_GT      = r'>'
 
-# Rule for numbers
 def t_NUMBER(t):
     r'\d+'
     t.value = int(t.value)
     return t
 
-# Rule for identifiers and reserved words
 def t_ID(t):
     r'[a-zA-Z_][a-zA-Z_0-9]*'
     t.type = reserved.get(t.value, 'ID')
     return t
 
-# Rule for comments
 def t_COMMENT(t):
     r'//.*'
-    pass  # No return value. Token discarded
+    pass
 
-# Rule for newlines
 def t_newline(t):
     r'\n+'
     t.lexer.lineno += len(t.value)
 
-# Ignored characters (spaces and tabs)
 t_ignore = ' \t'
 
-# Error handling rule
 def t_error(t):
     print(f"Illegal character '{t.value[0]}' at line {t.lineno}")
     t.lexer.skip(1)
 
-# Build the lexer
 def build_lexer():
     return lex.lex()
 
-# Function to tokenize input
 def tokenize(code):
-    """
-    Tokenize the input code and return a list of tokens
-    """
     lexer = build_lexer()
     lexer.input(code)
     

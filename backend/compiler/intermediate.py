@@ -1,8 +1,3 @@
-"""
-Intermediate Code Generator
-Generates three-address code (TAC) from AST
-"""
-
 class IntermediateCodeGenerator:
     def __init__(self):
         self.code = []
@@ -10,23 +5,19 @@ class IntermediateCodeGenerator:
         self.label_count = 0
     
     def new_temp(self):
-        """Generate a new temporary variable"""
         temp = f"t{self.temp_count}"
         self.temp_count += 1
         return temp
     
     def new_label(self):
-        """Generate a new label"""
         label = f"L{self.label_count}"
         self.label_count += 1
         return label
     
     def emit(self, instruction):
-        """Add an instruction to the code"""
         self.code.append(instruction)
     
     def generate(self, ast):
-        """Generate intermediate code from AST"""
         self.code = []
         self.temp_count = 0
         self.label_count = 0
@@ -38,7 +29,6 @@ class IntermediateCodeGenerator:
         return self.code
     
     def _generate_statement(self, stmt):
-        """Generate code for a statement"""
         if stmt['type'] == 'Declaration':
             result = self._generate_expression(stmt['value'])
             self.emit(f"{stmt['name']} = {result}")
@@ -58,7 +48,6 @@ class IntermediateCodeGenerator:
             
             self.emit(f"if_false {condition_temp} goto {label_else}")
             
-            # Then branch
             for s in stmt['then_branch']:
                 self._generate_statement(s)
             
@@ -86,7 +75,6 @@ class IntermediateCodeGenerator:
             self.emit(f"{label_end}:")
     
     def _generate_expression(self, expr):
-        """Generate code for an expression and return the result temporary"""
         if expr['type'] == 'Number':
             return str(expr['value'])
         
@@ -103,6 +91,5 @@ class IntermediateCodeGenerator:
         return None
 
 def generate_intermediate_code(ast):
-    """Generate intermediate code from AST"""
     generator = IntermediateCodeGenerator()
     return generator.generate(ast)

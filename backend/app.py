@@ -1,8 +1,3 @@
-"""
-Flask API Server for Mini Compiler
-Provides REST endpoints for compilation stages
-"""
-
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import traceback
@@ -13,17 +8,10 @@ from compiler.intermediate import generate_intermediate_code
 from compiler.executor import execute_code
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for Next.js frontend
+CORS(app)
 
 @app.route('/api/compile', methods=['POST'])
 def compile_code():
-    """
-    Compile the source code and return all stages:
-    - tokens: Lexical analysis results
-    - ast: Abstract Syntax Tree (parse tree)
-    - intermediate: Three-address code
-    - output: Execution results
-    """
     try:
         data = request.get_json()
         source_code = data.get('code', '')
@@ -42,7 +30,6 @@ def compile_code():
             'output': {}
         }
         
-        # Stage 1: Tokenization
         try:
             result['tokens'] = tokenize(source_code)
         except Exception as e:
@@ -52,7 +39,6 @@ def compile_code():
                 'stage': 'tokenization'
             }), 400
         
-        # Stage 2: Parsing (AST generation)
         try:
             result['ast'] = parse(source_code)
         except Exception as e:
@@ -63,7 +49,6 @@ def compile_code():
                 'tokens': result['tokens']
             }), 400
         
-        # Stage 3: Intermediate code generation
         try:
             result['intermediate'] = generate_intermediate_code(result['ast'])
         except Exception as e:
@@ -75,7 +60,6 @@ def compile_code():
                 'ast': result['ast']
             }), 400
         
-        # Stage 4: Execution
         try:
             result['output'] = execute_code(result['intermediate'])
         except Exception as e:
@@ -97,7 +81,7 @@ def compile_code():
             'error': f'Server error: {str(e)}'
         }), 500
 
-if __name__ == '__main__': # This ensures this function is directly called, if not then __name__ would be app, preventing autostart
+if __name__ == '__main__':
     print("=" * 60)
     print("Mini Compiler API Server")
     print("Server running on: http://localhost:5000")

@@ -1,7 +1,3 @@
-"""
-Mini Compiler Package
-"""
-
 from .lexer import tokenize
 from .parser import parse
 from .intermediate import generate_intermediate_code
