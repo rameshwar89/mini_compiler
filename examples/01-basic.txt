@@ -1,7 +1,0 @@
-// Example 1: Basic arithmetic and variables
-let a = 5;
-let b = 10;
-let sum = a + b;
-let product = a * b;
-print(sum);
-print(product);
