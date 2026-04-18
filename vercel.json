@@ -3,10 +3,5 @@
   "framework": "nextjs",
   "installCommand": "npm --prefix frontend install",
   "buildCommand": "npm --prefix frontend run build",
-  "devCommand": "npm --prefix frontend run dev",
-  "functions": {
-    "api/*.py": {
-      "runtime": "vercel-python@0.0.4"
-    }
-  }
+  "devCommand": "npm --prefix frontend run dev"
 }
