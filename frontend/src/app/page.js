@@ -37,7 +37,7 @@ export default function Home() {
     setError('');
     
     try {
-      const response = await fetch('http://localhost:5000/api/compile', {
+      const response = await fetch('/api/compile', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -55,7 +55,7 @@ export default function Home() {
         setError('');
       }
     } catch (err) {
-      setError('Failed to connect to backend server. Make sure Flask is running on port 5000.');
+      setError('Failed to connect to the compiler API. Please try again.');
     } finally {
       setLoading(false);
     }
