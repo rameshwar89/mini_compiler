@@ -10,6 +10,22 @@ from compiler.executor import execute_code
 app = Flask(__name__)
 CORS(app)
 
+@app.route('/', methods=['GET'])
+def index():
+    return jsonify({
+        'success': True,
+        'message': 'Mini Compiler API is running',
+        'compile_endpoint': '/api/compile',
+        'health_endpoint': '/api/health'
+    })
+
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    return jsonify({
+        'success': True,
+        'status': 'ok'
+    })
+
 @app.route('/api/compile', methods=['POST'])
 def compile_code():
     try:
