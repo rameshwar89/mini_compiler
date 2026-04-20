@@ -6,6 +6,7 @@ from compiler.lexer import tokenize
 from compiler.parser import parse
 from compiler.intermediate import generate_intermediate_code
 from compiler.executor import execute_code
+from compiler.lr1 import build_mini_language_lr1_table
 
 app = Flask(__name__)
 CORS(app)
@@ -16,7 +17,8 @@ def index():
         'success': True,
         'message': 'Mini Compiler API is running',
         'compile_endpoint': '/api/compile',
-        'health_endpoint': '/api/health'
+        'health_endpoint': '/api/health',
+        'lr1_endpoint': '/api/lr1-table'
     })
 
 @app.route('/api/health', methods=['GET'])
@@ -25,6 +27,22 @@ def health_check():
         'success': True,
         'status': 'ok'
     })
+
+
+@app.route('/api/lr1-table', methods=['GET'])
+def lr1_table():
+    try:
+        table = build_mini_language_lr1_table()
+        return jsonify({
+            'success': True,
+            'lr1': table
+        })
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': f'Failed to build LR(1) table: {str(e)}'
+        }), 500
 
 @app.route('/api/compile', methods=['POST'])
 def compile_code():

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import CodeEditor from '@/components/CodeEditor';
 import ParseTreeViewer from '@/components/ParseTreeViewer';
+import LR1TableViewer from '@/components/LR1TableViewer';
 
 const defaultCode = `// Mini Compiler Example
 let x = 10;
@@ -97,6 +98,7 @@ export default function Home() {
   const tabs = [
     { id: 'parseTree', label: 'Parse Tree', icon: '🌳' },
     { id: 'tokens', label: 'Tokens', icon: '🔤' },
+    { id: 'lr1', label: 'LR(1) Table', icon: '📊' },
     { id: 'intermediate', label: 'Intermediate Code', icon: '⚙️' },
     { id: 'output', label: 'Output', icon: '📤' },
   ];
@@ -166,6 +168,9 @@ export default function Home() {
         return tokens.length > 0 ? renderTokens() : (
           <p className="text-gray-400 text-center py-8">No tokens available. Click "Compile & Run".</p>
         );
+      
+      case 'lr1':
+        return <LR1TableViewer />;
       
       case 'intermediate':
         return intermediateCode && intermediateCode.length > 0 ? (
