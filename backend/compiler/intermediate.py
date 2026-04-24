@@ -17,79 +17,78 @@ class IntermediateCodeGenerator:
     def emit(self, instruction):
         self.code.append(instruction)
     
-    def generate(self, ast):
+    def generate(self, parse_tree):
         self.code = []
         self.temp_count = 0
         self.label_count = 0
         
-        if ast['type'] == 'Program':
-            for stmt in ast['statements']:
-                self._generate_statement(stmt)
+        if parse_tree['type'] == 'Program':
+            for statement in parse_tree['statements']:
+                self._generate_statement(statement)
         
         return self.code
     
-    def _generate_statement(self, stmt):
-        if stmt['type'] == 'Declaration':
-            result = self._generate_expression(stmt['value'])
-            self.emit(f"{stmt['name']} = {result}")
+    def _generate_statement(self, statement):
+        if statement['type'] == 'Declaration':
+            expression_result = self._generate_expression(statement['value'])
+            self.emit(f"{statement['name']} = {expression_result}")
         
-        elif stmt['type'] == 'Assignment':
-            result = self._generate_expression(stmt['value'])
-            self.emit(f"{stmt['name']} = {result}")
+        elif statement['type'] == 'Assignment':
+            expression_result = self._generate_expression(statement['value'])
+            self.emit(f"{statement['name']} = {expression_result}")
+        elif statement['type'] == 'PrintStatement':
+            expression_result = self._generate_expression(statement['value'])
+            self.emit(f"print {expression_result}")
         
-        elif stmt['type'] == 'PrintStatement':
-            result = self._generate_expression(stmt['value'])
-            self.emit(f"print {result}")
-        
-        elif stmt['type'] == 'IfStatement':
-            condition_temp = self._generate_expression(stmt['condition'])
-            label_else = self.new_label()
-            label_end = self.new_label()
+        elif statement['type'] == 'IfStatement':
+            condition_temp = self._generate_expression(statement['condition'])
+            else_label = self.new_label()
+            end_label = self.new_label()
             
-            self.emit(f"if_false {condition_temp} goto {label_else}")
+            self.emit(f"if_false {condition_temp} goto {else_label}")
             
-            for s in stmt['then_branch']:
-                self._generate_statement(s)
+            for then_statement in statement['then_branch']:
+                self._generate_statement(then_statement)
             
-            if stmt.get('else_branch'):
-                self.emit(f"goto {label_end}")
-                self.emit(f"{label_else}:")
-                for s in stmt['else_branch']:
-                    self._generate_statement(s)
-                self.emit(f"{label_end}:")
+            if statement.get('else_branch'):
+                self.emit(f"goto {end_label}")
+                self.emit(f"{else_label}:")
+                for else_statement in statement['else_branch']:
+                    self._generate_statement(else_statement)
+                self.emit(f"{end_label}:")
             else:
-                self.emit(f"{label_else}:")
+                self.emit(f"{else_label}:")
         
-        elif stmt['type'] == 'WhileStatement':
-            label_start = self.new_label()
-            label_end = self.new_label()
+        elif statement['type'] == 'WhileStatement':
+            start_label = self.new_label()
+            end_label = self.new_label()
             
-            self.emit(f"{label_start}:")
-            condition_temp = self._generate_expression(stmt['condition'])
-            self.emit(f"if_false {condition_temp} goto {label_end}")
+            self.emit(f"{start_label}:")
+            condition_temp = self._generate_expression(statement['condition'])
+            self.emit(f"if_false {condition_temp} goto {end_label}")
             
-            for s in stmt['body']:
-                self._generate_statement(s)
+            for body_statement in statement['body']:
+                self._generate_statement(body_statement)
             
-            self.emit(f"goto {label_start}")
-            self.emit(f"{label_end}:")
+            self.emit(f"goto {start_label}")
+            self.emit(f"{end_label}:")
     
-    def _generate_expression(self, expr):
-        if expr['type'] == 'Number':
-            return str(expr['value'])
+    def _generate_expression(self, expression):
+        if expression['type'] == 'Number':
+            return str(expression['value'])
         
-        elif expr['type'] == 'Identifier':
-            return expr['name']
+        elif expression['type'] == 'Identifier':
+            return expression['name']
         
-        elif expr['type'] == 'BinaryOp':
-            left = self._generate_expression(expr['left'])
-            right = self._generate_expression(expr['right'])
-            temp = self.new_temp()
-            self.emit(f"{temp} = {left} {expr['operator']} {right}")
-            return temp
+        elif expression['type'] == 'BinaryOp':
+            left_value = self._generate_expression(expression['left'])
+            right_value = self._generate_expression(expression['right'])
+            temp_name = self.new_temp()
+            self.emit(f"{temp_name} = {left_value} {expression['operator']} {right_value}")
+            return temp_name
         
         return None
 
-def generate_intermediate_code(ast):
+def generate_intermediate_code(parse_tree):
     generator = IntermediateCodeGenerator()
-    return generator.generate(ast)
+    return generator.generate(parse_tree)

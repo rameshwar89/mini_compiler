@@ -1,7 +1,75 @@
 'use client';
 
-export default function ParseTreeViewer({ ast }) {
-  if (!ast) {
+const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+const NODE_META_KEYS = new Set(['type', 'value', 'name', 'operator', 'line', 'position']);
+
+function PrimitiveValue({ value }) {
+  return <span className="text-green-400">{String(value)}</span>;
+}
+
+function NodeHeader({ node }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-blue-400 font-semibold">{node.type || 'Node'}</span>
+      {node.name !== undefined && <span className="text-purple-400">name={String(node.name)}</span>}
+      {node.value !== undefined && <span className="text-green-400">value={String(node.value)}</span>}
+      {node.operator !== undefined && <span className="text-orange-400">op={String(node.operator)}</span>}
+      {node.line !== undefined && node.position !== undefined && (
+        <span className="text-gray-500 text-xs">@ {node.line}:{node.position}</span>
+      )}
+    </div>
+  );
+}
+
+function RenderTree({ label, node, path = 'root', depth = 0 }) {
+  const marginLeft = depth * 16;
+
+  if (Array.isArray(node)) {
+    return (
+      <div className="my-1" style={{ marginLeft }}>
+        {label && <div className="text-gray-400 text-xs uppercase mb-1">{label}</div>}
+        {node.length === 0 ? (
+          <div className="text-gray-500 text-xs">(empty)</div>
+        ) : (
+          node.map((item, index) => (
+            <RenderTree
+              key={`${path}[${index}]`}
+              label={`[${index}]`}
+              node={item}
+              path={`${path}[${index}]`}
+              depth={depth + 1}
+            />
+          ))
+        )}
+      </div>
+    );
+  }
+
+  if (!isObject(node)) {
+    return (
+      <div className="my-1" style={{ marginLeft }}>
+        {label && <span className="text-gray-400 text-xs uppercase mr-2">{label}:</span>}
+        <PrimitiveValue value={node} />
+      </div>
+    );
+  }
+
+  const childEntries = Object.entries(node).filter(([key]) => !NODE_META_KEYS.has(key));
+
+  return (
+    <div className="my-1" style={{ marginLeft }}>
+      {label && <div className="text-gray-400 text-xs uppercase mb-1">{label}</div>}
+      <NodeHeader node={node} />
+      {childEntries.map(([key, value]) => (
+        <RenderTree key={`${path}.${key}`} label={key} node={value} path={`${path}.${key}`} depth={depth + 1} />
+      ))}
+    </div>
+  );
+}
+
+export default function ParseTreeViewer({ parseTree }) {
+  if (!parseTree) {
     return (
       <div className="text-gray-500 italic text-sm">
         No parse tree yet. Click "Compile & Run" to see results.
@@ -9,87 +77,9 @@ export default function ParseTreeViewer({ ast }) {
     );
   }
 
-  const renderNode = (node, level = 0) => {
-    if (!node || typeof node !== 'object') {
-      return (
-        <div className="ml-6 text-yellow-400 text-sm flex items-center gap-2">
-          <span className="text-gray-500">└─→</span>
-          {String(node)}
-        </div>
-      );
-    }
-
-    const nodeType = node.type || 'Node';
-    const indent = level * 24;
-
-    return (
-      <div key={Math.random()} style={{ marginLeft: `${indent}px` }} className="my-1">
-        {/* Node Type */}
-        <div className="flex items-center gap-2">
-          {level > 0 && <span className="text-gray-600">├─→</span>}
-          <span className="text-blue-400 font-semibold">{nodeType}</span>
-          
-          {/* Show simple values inline */}
-          {node.value !== undefined && (
-            <span className="text-green-400">= {String(node.value)}</span>
-          )}
-          {node.name !== undefined && (
-            <span className="text-purple-400">"{node.name}"</span>
-          )}
-          {node.op !== undefined && (
-            <span className="text-orange-400">"{node.op}"</span>
-          )}
-        </div>
-
-        {/* Render children and properties */}
-        <div className="ml-6">
-          {Object.entries(node).map(([key, value]) => {
-            if (key === 'type') return null;
-            
-            // Handle simple inline values
-            if (key === 'value' || key === 'name' || key === 'op') return null;
-            
-            // Handle complex nested objects
-            if (value && typeof value === 'object') {
-              if (Array.isArray(value)) {
-                return (
-                  <div key={key} className="my-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-600">│</span>
-                      <span className="text-gray-400 text-xs uppercase">{key}:</span>
-                    </div>
-                    {value.map((item, idx) => (
-                      <div key={idx} className="ml-2">
-                        {renderNode(item, level + 1)}
-                      </div>
-                    ))}
-                  </div>
-                );
-              } else {
-                return (
-                  <div key={key} className="my-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-600">│</span>
-                      <span className="text-gray-400 text-xs uppercase">{key}:</span>
-                    </div>
-                    <div className="ml-2">
-                      {renderNode(value, level + 1)}
-                    </div>
-                  </div>
-                );
-              }
-            }
-            
-            return null;
-          })}
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="font-mono text-sm h-full overflow-auto bg-gray-900/50 p-4 rounded">
-      {renderNode(ast)}
+      <RenderTree node={parseTree} />
     </div>
   );
 }

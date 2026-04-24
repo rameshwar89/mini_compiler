@@ -80,17 +80,17 @@ class Executor:
         expr = expr.strip()
         
         ops = {
-            '==': lambda l, r: 1 if l == r else 0,
-            '!=': lambda l, r: 1 if l != r else 0,
-            '<=': lambda l, r: 1 if l <= r else 0,
-            '>=': lambda l, r: 1 if l >= r else 0,
-            '<': lambda l, r: 1 if l < r else 0,
-            '>': lambda l, r: 1 if l > r else 0,
-            '+': lambda l, r: l + r,
-            '-': lambda l, r: l - r,
-            '*': lambda l, r: l * r,
-            '/': lambda l, r: l // r if r != 0 else 0,
-            '%': lambda l, r: l % r if r != 0 else 0,
+            '==': lambda left_value, right_value: 1 if left_value == right_value else 0,
+            '!=': lambda left_value, right_value: 1 if left_value != right_value else 0,
+            '<=': lambda left_value, right_value: 1 if left_value <= right_value else 0,
+            '>=': lambda left_value, right_value: 1 if left_value >= right_value else 0,
+            '<': lambda left_value, right_value: 1 if left_value < right_value else 0,
+            '>': lambda left_value, right_value: 1 if left_value > right_value else 0,
+            '+': lambda left_value, right_value: left_value + right_value,
+            '-': lambda left_value, right_value: left_value - right_value,
+            '*': lambda left_value, right_value: left_value * right_value,
+            '/': lambda left_value, right_value: left_value // right_value if right_value != 0 else 0,
+            '%': lambda left_value, right_value: left_value % right_value if right_value != 0 else 0,
         }
         
         for op in ['==', '!=', '<=', '>=']:

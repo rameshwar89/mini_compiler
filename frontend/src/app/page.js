@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import CodeEditor from '@/components/CodeEditor';
 import ParseTreeViewer from '@/components/ParseTreeViewer';
 import LR1TableViewer from '@/components/LR1TableViewer';
@@ -27,16 +27,51 @@ export default function Home() {
   const [compileResult, setCompileResult] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  
+
   // UI State
-  const [selectedTab, setSelectedTab] = useState('parseTree'); // active tab in single mode
-  const [tokenView, setTokenView] = useState('all'); // 'all', 'keywords', 'operators', 'identifiers', 'literals'
-  const [outputView, setOutputView] = useState('programOutput'); // 'programOutput', 'variables'
+  const [selectedTab, setSelectedTab] = useState('tokens');
+  const [tokenView, setTokenView] = useState('all');
+  const [outputView, setOutputView] = useState('programOutput');
+  const [dividerPosition, setDividerPosition] = useState(50);
+  const [isDragging, setIsDragging] = useState(false);
+  const containerRef = useRef(null);
+
+  const handleDividerMouseDown = () => {
+    setIsDragging(true);
+  };
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e) => {
+      if (!containerRef.current) return;
+
+      const rect = containerRef.current.getBoundingClientRect();
+      const newPosition = ((e.clientX - rect.left) / rect.width) * 100;
+
+      // Constrain between 20% and 80%
+      if (newPosition >= 20 && newPosition <= 80) {
+        setDividerPosition(newPosition);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
 
   const handleCompile = async () => {
     setLoading(true);
     setError('');
-    
+
     try {
       const response = await fetch('http://localhost:5000/api/compile', {
         method: 'POST',
@@ -64,13 +99,13 @@ export default function Home() {
 
   // Get tokens from compile result
   const tokens = compileResult?.tokens || [];
-  const parseTree = compileResult?.ast || null;
+  const parseTree = compileResult?.parse_tree || null;
   const intermediateCode = compileResult?.intermediate || [];
-  const outputData = compileResult?.output || {};
+  const outputData = compileResult?.output || null;
 
   // Classify tokens by category
   const classifyTokens = (category = tokenView) => {
-    const keywords = tokens.filter(t => ['LET', 'IF', 'ELSE', 'WHILE', 'PRINT', 'AND'].includes(t.type));
+    const keywords = tokens.filter(t => ['LET', 'IF', 'ELSE', 'WHILE', 'PRINT'].includes(t.type));
     const operators = tokens.filter(t => ['PLUS', 'MINUS', 'TIMES', 'DIVIDE', 'MODULO', 'ASSIGN', 'EQ', 'NE', 'LT', 'GT', 'LE', 'GE'].includes(t.type));
     const identifiers = tokens.filter(t => t.type === 'ID');
     const literals = tokens.filter(t => t.type === 'NUMBER');
@@ -96,11 +131,11 @@ export default function Home() {
   };
 
   const tabs = [
-    { id: 'parseTree', label: 'Parse Tree', icon: '🌳' },
-    { id: 'tokens', label: 'Tokens', icon: '🔤' },
-    { id: 'lr1', label: 'LR(1) Table', icon: '📊' },
-    { id: 'intermediate', label: 'Intermediate Code', icon: '⚙️' },
-    { id: 'output', label: 'Output', icon: '📤' },
+    { id: 'tokens',       label: 'Tokens' },
+    { id: 'parseTree',    label: 'Parse Tree' },
+    { id: 'intermediate', label: 'Intermediate Code' },
+    { id: 'output',       label: 'Output' },
+    { id: 'lr1',          label: 'LR(1) Table' },
   ];
 
   const tokenCounts = classifyTokens('count');
@@ -115,7 +150,7 @@ export default function Home() {
 
   const renderTokens = () => {
     const filteredTokens = classifyTokens();
-    
+
     return (
       <div className="h-full flex flex-col">
         {/* Token Classification Tabs */}
@@ -124,11 +159,10 @@ export default function Home() {
             <button
               key={tab.id}
               onClick={() => setTokenView(tab.id)}
-              className={`px-3 py-1 rounded text-sm font-medium transition-all ${
-                tokenView === tab.id
+              className={`px-3 py-1 rounded text-sm font-medium transition-all ${tokenView === tab.id
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
+                }`}
             >
               {tab.label} <span className="text-xs opacity-75">({tab.count})</span>
             </button>
@@ -155,42 +189,55 @@ export default function Home() {
 
   const renderSingleOutput = () => {
     switch (selectedTab) {
+      case 'tokens':
+        return tokens.length > 0 ? renderTokens() : (
+          <p className="text-gray-400 text-center py-8">
+            {compileResult ? 'No tokens found.' : 'Click "Compile & Run" to see tokens.'}
+          </p>
+        );
+
       case 'parseTree':
         return parseTree ? (
           <div className="h-full overflow-y-auto pr-2">
-            <ParseTreeViewer ast={parseTree} />
+            <ParseTreeViewer parseTree={parseTree} />
           </div>
         ) : (
-          <p className="text-gray-400 text-center py-8">No parse tree available. Click "Compile & Run".</p>
+          <p className="text-gray-400 text-center py-8">
+            {compileResult ? 'No parse tree was produced.' : 'Click "Compile & Run" to see the parse tree.'}
+          </p>
         );
-      
-      case 'tokens':
-        return tokens.length > 0 ? renderTokens() : (
-          <p className="text-gray-400 text-center py-8">No tokens available. Click "Compile & Run".</p>
-        );
-      
-      case 'lr1':
-        return <LR1TableViewer />;
-      
+
       case 'intermediate':
-        return intermediateCode && intermediateCode.length > 0 ? (
-          <div className="h-full overflow-y-auto p-4 bg-gray-900 rounded-lg space-y-1">
-            {intermediateCode.map((line, index) => (
-              <div key={index} className="text-sm text-gray-300 font-mono">
-                {line}
-              </div>
-            ))}
+        return intermediateCode.length > 0 ? (
+          <div className="h-full overflow-y-auto p-4 bg-gray-900 rounded-lg">
+            <table className="w-full text-sm font-mono border-collapse">
+              <thead>
+                <tr className="text-gray-400 border-b border-gray-700">
+                  <th className="text-left pb-2 pr-4 w-12">#</th>
+                  <th className="text-left pb-2">Instruction</th>
+                </tr>
+              </thead>
+              <tbody>
+                {intermediateCode.map((line, index) => (
+                  <tr key={index} className="hover:bg-gray-800/50 transition-colors">
+                    <td className="pr-4 py-1 text-gray-500 text-xs">{index}</td>
+                    <td className="py-1 text-gray-300">{line}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         ) : (
-          <p className="text-gray-400 text-center py-8">No intermediate code available. Click "Compile & Run".</p>
+          <p className="text-gray-400 text-center py-8">
+            {compileResult ? 'No intermediate code was generated.' : 'Click "Compile & Run" to see intermediate code.'}
+          </p>
         );
-      
+
       case 'output':
-        return outputData && outputData.output ? (
+        return outputData && Array.isArray(outputData.output) ? (
           <div className="h-full flex flex-col">
             {/* Output Sub-tabs */}
             <div className="flex gap-2 mb-4 flex-wrap flex-shrink-0">
-              
               <button
                 onClick={() => setOutputView('programOutput')}
                 className={`px-3 py-1 rounded text-sm font-medium transition-all ${
@@ -199,9 +246,8 @@ export default function Home() {
                     : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                 }`}
               >
-                📤 Program Output <span className="text-xs opacity-75">({outputData.output.length})</span>
+                Program Output <span className="text-xs opacity-75">({outputData.output.length})</span>
               </button>
-
               <button
                 onClick={() => setOutputView('variables')}
                 className={`px-3 py-1 rounded text-sm font-medium transition-all ${
@@ -210,21 +256,23 @@ export default function Home() {
                     : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                 }`}
               >
-                💾 Variables <span className="text-xs opacity-75">({outputData.variables ? Object.keys(outputData.variables).length : 0})</span>
+                Variables <span className="text-xs opacity-75">({outputData.variables ? Object.keys(outputData.variables).length : 0})</span>
               </button>
-
             </div>
-
             {/* Output Content */}
             <div className="flex-1 overflow-y-auto p-4 bg-gray-900 rounded-lg">
               {outputView === 'programOutput' ? (
-                <div className="space-y-1">
-                  {outputData.output.map((line, index) => (
-                    <div key={index} className="text-sm text-green-400 font-mono bg-green-900/20 px-3 py-1 rounded">
-                      {line}
-                    </div>
-                  ))}
-                </div>
+                outputData.output.length > 0 ? (
+                  <div className="space-y-1">
+                    {outputData.output.map((line, index) => (
+                      <div key={index} className="text-sm text-green-400 font-mono bg-green-900/20 px-3 py-1 rounded">
+                        {line}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-400 text-center py-8">Program produced no output.</p>
+                )
               ) : (
                 <div className="space-y-1">
                   {outputData.variables && Object.keys(outputData.variables).length > 0 ? (
@@ -234,16 +282,21 @@ export default function Home() {
                       </div>
                     ))
                   ) : (
-                    <p className="text-gray-400 text-center py-8">No variables available.</p>
+                    <p className="text-gray-400 text-center py-8">No user-defined variables.</p>
                   )}
                 </div>
               )}
             </div>
           </div>
         ) : (
-          <p className="text-gray-400 text-center py-8">No output available. Click "Compile & Run".</p>
+          <p className="text-gray-400 text-center py-8">
+            {compileResult ? 'Execution produced no output data.' : 'Click "Compile & Run" to see output.'}
+          </p>
         );
-      
+
+      case 'lr1':
+        return <LR1TableViewer />;
+
       default:
         return null;
     }
@@ -256,7 +309,7 @@ export default function Home() {
         <h1 className="text-3xl font-bold mb-1 bg-gradient-to-r from-blue-400 to-purple-500 text-transparent bg-clip-text">
           Mini Compiler
         </h1>
-        <p className="text-gray-400 text-sm">Python Backend (PLY) + Next.js Frontend</p>
+        <p className="text-gray-400 text-sm">Python Backend (Custom LR(1)) + Next.js Frontend</p>
       </div>
 
       {/* Controls */}
@@ -266,8 +319,13 @@ export default function Home() {
           disabled={loading}
           className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-600 disabled:to-gray-700 text-white px-6 py-2 rounded-lg font-semibold transition-all shadow-lg"
         >
-          {loading ? 'Compiling...' : '▶ Compile & Run'}
+          {loading ? 'Compiling...' : 'Compile & Run'}
         </button>
+        {compileResult && !error && (
+          <span className="text-green-400 text-sm font-medium">
+            ✓ Compiled successfully &mdash; {tokens.length} tokens
+          </span>
+        )}
       </div>
 
       {/* Error Display */}
@@ -279,12 +337,17 @@ export default function Home() {
 
       {/* Main Content */}
       <div className="max-w-[1800px] mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-[calc(100vh-200px)]">
+        <div
+          ref={containerRef}
+          className={`flex h-[calc(100vh-200px)] gap-0 ${isDragging ? 'select-none' : ''
+            }`}
+          style={{ cursor: isDragging ? 'col-resize' : 'default' }}
+        >
           {/* Left Column - Code Editor */}
-          <div className="flex flex-col h-full">
+          <div style={{ flex: `0 0 ${dividerPosition}%` }} className="flex flex-col h-full min-w-[250px]">
             <div className="bg-gray-800 rounded-lg p-4 shadow-xl border border-gray-700 flex-1 flex flex-col">
               <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                💻 Source Code
+                Source Code
               </h2>
               <div className="flex-1 min-h-0">
                 <CodeEditor value={code} onChange={setCode} />
@@ -292,28 +355,39 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Right Column - Output */}
-          <div className="bg-gray-800 rounded-lg p-4 shadow-xl border border-gray-700 flex flex-col h-full overflow-hidden">
-            {/* Main Tabs */}
-            <div className="flex gap-1 mb-4 border-b border-gray-700 overflow-x-auto pb-2">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setSelectedTab(tab.id)}
-                  className={`px-4 py-2 font-medium transition-all whitespace-nowrap text-sm ${
-                    selectedTab === tab.id
-                      ? 'text-blue-400 border-b-2 border-blue-400 -mb-[2px]'
-                      : 'text-gray-400 hover:text-white'
-                  }`}
-                >
-                  {tab.icon} {tab.label}
-                </button>
-              ))}
-            </div>
+          {/* Draggable Divider */}
+          <div
+            onMouseDown={handleDividerMouseDown}
+            className="w-1 bg-gray-700 hover:bg-blue-500 transition-colors cursor-col-resize flex-shrink-0 hover:w-1.5"
+            style={{
+              backgroundColor: isDragging ? '#3b82f6' : '#374151',
+              transition: isDragging ? 'none' : 'all 200ms ease',
+            }}
+          />
 
-            {/* Output Content */}
-            <div className="flex-1 overflow-hidden">
-              {renderSingleOutput()}
+          {/* Right Column - Output */}
+          <div style={{ flex: '1 1 auto' }} className="flex flex-col h-full min-w-[250px] ml-4">
+            <div className="bg-gray-800 rounded-lg p-4 shadow-xl border border-gray-700 flex flex-col h-full overflow-hidden">
+              {/* Main Tabs */}
+              <div className="flex gap-1 mb-4 border-b border-gray-700 overflow-x-auto pb-2">
+                {tabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setSelectedTab(tab.id)}
+                    className={`px-4 py-2 font-medium transition-all whitespace-nowrap text-sm ${selectedTab === tab.id
+                        ? 'text-blue-400 border-b-2 border-blue-400 -mb-[2px]'
+                        : 'text-gray-400 hover:text-white'
+                      }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Output Content */}
+              <div className="flex-1 overflow-hidden">
+                {renderSingleOutput()}
+              </div>
             </div>
           </div>
         </div>

@@ -1,136 +1,544 @@
-import ply.yacc as yacc
-from .lexer import tokens
+from collections import defaultdict, deque
+from dataclasses import dataclass
+from typing import Any, Dict, FrozenSet, Iterable, List, Set, Tuple
+from .grammar import GRAMMAR_PRODUCTIONS, GRAMMAR_START_SYMBOL
+from .lexer import Token, tokenize_objects, tokens as lexer_tokens
 
-precedence = (
-    ('left', 'EQ', 'NE', 'LT', 'GT', 'LE', 'GE'),
-    ('left', 'PLUS', 'MINUS'),
-    ('left', 'TIMES', 'DIVIDE', 'MODULO'),
-)
+EPSILON = "e"
+ENDMARK = "$"
+
+@dataclass(frozen=True)
+class Production:
+    lhs: str
+    rhs: Tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class LR1Item:
+    prod_index: int
+    dot: int
+    lookahead: str
+
+# Parsing Table Generator
+class LR1TableGenerator:
+    def __init__(self, productions: List[Tuple[str, List[str]]], start_symbol: str, terminals: Set[str]):
+        self.start_symbol = start_symbol
+        self.augmented_start = self._build_augmented_start(productions, start_symbol)
+
+        base_productions = [Production(lhs, tuple(rhs)) for lhs, rhs in productions]
+        self.productions: List[Production] = [
+            Production(self.augmented_start, (self.start_symbol,)),
+            *base_productions,
+        ]
+
+        self.nonterminals = {production.lhs for production in self.productions}
+        self.terminals = set(terminals)
+        self.terminals.discard(self.augmented_start)
+        self.terminals -= self.nonterminals
+        self.terminals.add(ENDMARK)
+
+        self.productions_by_lhs: Dict[str, List[int]] = defaultdict(list)
+        for production_index, production in enumerate(self.productions):
+            self.productions_by_lhs[production.lhs].append(production_index)
+
+        self.first_sets = self._build_first_sets()
+
+    def _build_augmented_start(self, productions: List[Tuple[str, List[str]]], start_symbol: str) -> str:
+        symbols = {lhs for lhs, _ in productions}
+        candidate = f"{start_symbol}'"
+        while candidate in symbols:
+            candidate += "'"
+        return candidate
+
+    def _build_first_sets(self) -> Dict[str, Set[str]]:
+        first: Dict[str, Set[str]] = {}
+
+        for terminal in self.terminals:
+            first[terminal] = {terminal}
+        for nonterminal in self.nonterminals:
+            first.setdefault(nonterminal, set())
+
+        changed = True
+        while changed:
+            changed = False
+            for production in self.productions:
+                lhs = production.lhs
+                rhs = production.rhs
+
+                if not rhs:
+                    if EPSILON not in first[lhs]:
+                        first[lhs].add(EPSILON)
+                        changed = True
+                    continue
+
+                rhs_allows_epsilon = True
+                for symbol in rhs:
+                    symbol_first = first.get(symbol, {symbol})
+                    before = len(first[lhs])
+                    first[lhs].update(symbol_first - {EPSILON})
+                    if len(first[lhs]) != before:
+                        changed = True
+
+                    if EPSILON not in symbol_first:
+                        rhs_allows_epsilon = False
+                        break
+
+                if rhs_allows_epsilon and EPSILON not in first[lhs]:
+                    first[lhs].add(EPSILON)
+                    changed = True
+
+        return first
+
+    def _first_of_sequence(self, symbols: Iterable[str]) -> Set[str]:
+        result: Set[str] = set()
+        symbol_list = list(symbols)
+
+        if not symbol_list:
+            return {EPSILON}
+
+        for symbol in symbol_list:
+            symbol_first = self.first_sets.get(symbol, {symbol})
+            result.update(symbol_first - {EPSILON})
+            if EPSILON not in symbol_first:
+                return result
+
+        result.add(EPSILON)
+        return result
+
+    def closure(self, items: Set[LR1Item]) -> FrozenSet[LR1Item]:
+        closure_set = set(items)
+        queue = deque(items)
+
+        while queue:
+            item = queue.popleft()
+            production = self.productions[item.prod_index]
+
+            if item.dot >= len(production.rhs):
+                continue
+
+            symbol_after_dot = production.rhs[item.dot]
+            if symbol_after_dot not in self.nonterminals:
+                continue
+
+            beta = production.rhs[item.dot + 1 :]
+            lookahead_symbols = tuple(beta) + (item.lookahead,)
+            lookaheads = self._first_of_sequence(lookahead_symbols) - {EPSILON}
+
+            for prod_index in self.productions_by_lhs[symbol_after_dot]:
+                for lookahead in lookaheads:
+                    new_item = LR1Item(prod_index, 0, lookahead)
+                    if new_item not in closure_set:
+                        closure_set.add(new_item)
+                        queue.append(new_item)
+
+        return frozenset(closure_set)
+
+    def goto(self, state: FrozenSet[LR1Item], symbol: str) -> FrozenSet[LR1Item]:
+        moved_items: Set[LR1Item] = set()
+
+        for item in state:
+            production = self.productions[item.prod_index]
+            if item.dot < len(production.rhs) and production.rhs[item.dot] == symbol:
+                moved_items.add(LR1Item(item.prod_index, item.dot + 1, item.lookahead))
+
+        if not moved_items:
+            return frozenset()
+
+        return self.closure(moved_items)
+
+    def canonical_collection(self) -> Tuple[List[FrozenSet[LR1Item]], Dict[Tuple[int, str], int]]:
+        start_item = LR1Item(0, 0, ENDMARK)
+        initial_state = self.closure({start_item})
+
+        states: List[FrozenSet[LR1Item]] = [initial_state]
+        state_ids: Dict[FrozenSet[LR1Item], int] = {initial_state: 0}
+        transitions: Dict[Tuple[int, str], int] = {}
+
+        queue = deque([initial_state])
+
+        while queue:
+            state = queue.popleft()
+            state_id = state_ids[state]
+
+            next_symbols = sorted(
+                {
+                    self.productions[item.prod_index].rhs[item.dot]
+                    for item in state
+                    if item.dot < len(self.productions[item.prod_index].rhs)
+                }
+            )
+
+            for symbol in next_symbols:
+                target = self.goto(state, symbol)
+                if not target:
+                    continue
+
+                if target not in state_ids:
+                    state_ids[target] = len(states)
+                    states.append(target)
+                    queue.append(target)
+
+                transitions[(state_id, symbol)] = state_ids[target]
+
+        return states, transitions
+
+    def _add_action(
+        self,
+        action_table: List[Dict[str, Dict[str, object]]],
+        state_id: int,
+        symbol: str,
+        candidate: Dict[str, object],
+        conflicts: List[Dict[str, object]],
+    ) -> None:
+        existing = action_table[state_id].get(symbol)
+        if existing is None:
+            action_table[state_id][symbol] = candidate
+            return
+
+        if existing == candidate:
+            return
+
+        conflicts.append(
+            {
+                "state": state_id,
+                "symbol": symbol,
+                "existing": existing,
+                "candidate": candidate,
+            }
+        )
+
+        # Keep deterministic behavior: prefer shift, otherwise keep first reduce.
+        if existing["type"] == "shift":
+            return
+        if candidate["type"] == "shift":
+            action_table[state_id][symbol] = candidate
+            return
+
+    def build(self) -> Dict[str, object]:
+        states, transitions = self.canonical_collection()
+
+        action_table: List[Dict[str, Dict[str, object]]] = [dict() for _ in states]
+        goto_table: List[Dict[str, int]] = [dict() for _ in states]
+        conflicts: List[Dict[str, object]] = []
+
+        for state_id, state in enumerate(states):
+            for item in state:
+                production = self.productions[item.prod_index]
+
+                if item.dot < len(production.rhs):
+                    symbol = production.rhs[item.dot]
+                    target = transitions.get((state_id, symbol))
+                    if target is None:
+                        continue
+
+                    if symbol in self.terminals:
+                        self._add_action(
+                            action_table,
+                            state_id,
+                            symbol,
+                            {
+                                "type": "shift",
+                                "to_state": target,
+                                "repr": f"s{target}",
+                            },
+                            conflicts,
+                        )
+                    else:
+                        goto_table[state_id][symbol] = target
+                else:
+                    if production.lhs == self.augmented_start and item.lookahead == ENDMARK:
+                        self._add_action(
+                            action_table,
+                            state_id,
+                            ENDMARK,
+                            {
+                                "type": "accept",
+                                "repr": "acc",
+                            },
+                            conflicts,
+                        )
+                    else:
+                        self._add_action(
+                            action_table,
+                            state_id,
+                            item.lookahead,
+                            {
+                                "type": "reduce",
+                                "production": item.prod_index,
+                                "repr": f"r{item.prod_index}",
+                            },
+                            conflicts,
+                        )
+
+        terminals_for_table = sorted(terminal for terminal in self.terminals)
+        nonterminals_for_table = sorted(nonterminal for nonterminal in self.nonterminals if nonterminal != self.augmented_start)
+
+        table_rows = []
+        for state_id in range(len(states)):
+            action_row = {
+                terminal: action_table[state_id].get(terminal, {}).get("repr", "")
+                for terminal in terminals_for_table
+            }
+            goto_row = {
+                nonterminal: goto_table[state_id].get(nonterminal, "")
+                for nonterminal in nonterminals_for_table
+            }
+            table_rows.append(
+                {
+                    "state": state_id,
+                    "action": action_row,
+                    "goto": goto_row,
+                }
+            )
+
+        serialized_states = []
+        for state_id, state in enumerate(states):
+            items_payload = []
+            for item in sorted(state, key=lambda lr1_item: (lr1_item.prod_index, lr1_item.dot, lr1_item.lookahead)):
+                production = self.productions[item.prod_index]
+                rhs = list(production.rhs)
+                dotted_rhs = rhs[:]
+                dotted_rhs.insert(item.dot, ".")
+                items_payload.append(
+                    {
+                        "production": item.prod_index,
+                        "item": f"{production.lhs} -> {' '.join(dotted_rhs)} , {item.lookahead}",
+                        "lookahead": item.lookahead,
+                    }
+                )
+
+            transition_payload = {
+                symbol: target
+                for (src_state, symbol), target in transitions.items()
+                if src_state == state_id
+            }
+
+            serialized_states.append(
+                {
+                    "id": state_id,
+                    "items": items_payload,
+                    "transitions": dict(sorted(transition_payload.items())),
+                }
+            )
+
+        productions_payload = []
+        for index, production in enumerate(self.productions):
+            productions_payload.append(
+                {
+                    "id": index,
+                    "lhs": production.lhs,
+                    "rhs": list(production.rhs),
+                    "display": f"{production.lhs} -> {' '.join(production.rhs)}",
+                }
+            )
+
+        return {
+            "grammar": {
+                "start_symbol": self.start_symbol,
+                "augmented_start": self.augmented_start,
+                "terminals": terminals_for_table,
+                "nonterminals": nonterminals_for_table,
+            },
+            "productions": productions_payload,
+            "states": serialized_states,
+            "action_table": {str(i): action_table[i] for i in range(len(states))},
+            "goto_table": {str(i): goto_table[i] for i in range(len(states))},
+            "table_rows": table_rows,
+            "conflicts": conflicts,
+            "summary": {
+                "states": len(states),
+                "productions": len(self.productions),
+                "conflict_count": len(conflicts),
+                "is_lr1": len(conflicts) == 0,
+            },
+        }
+
+
+def build_mini_language_lr1_table() -> Dict[str, object]:
+    """Build and return the LR(1) parse table for the mini language."""
+    generator = LR1TableGenerator(
+        productions=GRAMMAR_PRODUCTIONS,
+        start_symbol=GRAMMAR_START_SYMBOL,
+        terminals=set(lexer_tokens),
+    )
+    return generator.build()
+
+
+# Parser 
+
+@dataclass(frozen=True)
+class _EndToken:
+    token_type: str = ENDMARK
+    value: str = ENDMARK
+    line: int = -1
+    position: int = -1
+
+
 class ASTNode:
     def __init__(self, node_type, **attributes):
         self.type = node_type
         self.__dict__.update(attributes)
-    
+
     def to_dict(self):
         result = {'type': self.type}
-        
+
         for key, value in self.__dict__.items():
             if key == 'type':
                 continue
-                
+
             if isinstance(value, ASTNode):
                 result[key] = value.to_dict()
             elif isinstance(value, list):
-                result[key] = [item.to_dict() if isinstance(item, ASTNode) else item 
-                              for item in value]
+                result[key] = [
+                    item.to_dict() if isinstance(item, ASTNode) else item
+                    for item in value
+                ]
             else:
                 result[key] = value
-                
+
         return result
 
 
-def p_program(p):
-    """program : statement_list"""
-    p[0] = ASTNode('Program', statements=p[1])
+_TABLE_CACHE: Dict[str, Any] | None = None
 
 
-def p_statement_list(p):
-    """statement_list : statement_list statement
-                      | statement"""
-    if len(p) == 3:
-        p[0] = p[1] + [p[2]]
-    else:
-        p[0] = [p[1]]
+def _get_table() -> Dict[str, Any]:
+    global _TABLE_CACHE
+    if _TABLE_CACHE is None:
+        _TABLE_CACHE = build_mini_language_lr1_table()
+    return _TABLE_CACHE
 
 
-def p_statement(p):
-    """statement : declaration
-                 | assignment
-                 | if_statement
-                 | while_statement
-                 | print_statement"""
-    p[0] = p[1]
+def _binary(operator_symbol: str, left_value: Any, right_value: Any) -> ASTNode:
+    return ASTNode('BinaryOp', operator=operator_symbol, left=left_value, right=right_value)
 
 
-def p_declaration(p):
-    """declaration : LET ID ASSIGN expression SEMICOLON""" 
-    p[0] = ASTNode('Declaration', name=p[2], value=p[4])
+def _reduce_semantic(production_index: int, semantic_values: List[Any]) -> Any:
+    if production_index == 1:
+        return ASTNode('Program', statements=semantic_values[0])
+    if production_index == 2:
+        return semantic_values[0] + [semantic_values[1]]
+    if production_index == 3:
+        return [semantic_values[0]]
+    if production_index in (4, 5, 6, 7, 8):
+        return semantic_values[0]
+    if production_index == 9:
+        return ASTNode('Declaration', name=semantic_values[1], value=semantic_values[3])
+    if production_index == 10:
+        return ASTNode('Assignment', name=semantic_values[0], value=semantic_values[2])
+    if production_index == 11:
+        return ASTNode('IfStatement', condition=semantic_values[2], then_branch=semantic_values[5], else_branch=None)
+    if production_index == 12:
+        return ASTNode('IfStatement', condition=semantic_values[2], then_branch=semantic_values[5], else_branch=semantic_values[9])
+    if production_index == 13:
+        return ASTNode('WhileStatement', condition=semantic_values[2], body=semantic_values[5])
+    if production_index == 14:
+        return ASTNode('PrintStatement', value=semantic_values[2])
+    if production_index in (15, 18, 23, 26, 30):
+        return semantic_values[0]
+    if production_index in (16, 17, 19, 20, 21, 22, 24, 25, 27, 28, 29):
+        return _binary(semantic_values[1], semantic_values[0], semantic_values[2])
+    if production_index == 31:
+        return semantic_values[1]
+    if production_index == 32:
+        return ASTNode('Number', value=semantic_values[0])
+    if production_index == 33:
+        return ASTNode('Identifier', name=semantic_values[0])
+
+    raise RuntimeError(f'Unhandled production index {production_index}')
 
 
-def p_assignment(p):
-    """assignment : ID ASSIGN expression SEMICOLON"""
-    p[0] = ASTNode('Assignment', name=p[1], value=p[3])
+def _shift_value(token: Token | _EndToken) -> Any:
+    if token.token_type == 'NUMBER':
+        return int(token.value)
+    if token.token_type == 'ID':
+        return str(token.value)
+    return token.value
 
 
-def p_if_statement(p):
-    """if_statement : IF LPAREN expression RPAREN LBRACE statement_list RBRACE
-                    | IF LPAREN expression RPAREN LBRACE statement_list RBRACE ELSE LBRACE statement_list RBRACE"""
-    has_else = len(p) == 12
-    p[0] = ASTNode('IfStatement', 
-                   condition=p[3], 
-                   then_branch=p[6],
-                   else_branch=p[10] if has_else else None)
+def _syntax_error(lookahead: Token | _EndToken) -> None:
+    if lookahead.token_type == ENDMARK:
+        raise SyntaxError('Unexpected end of file')
+    raise SyntaxError(f"Syntax error at '{lookahead.value}' (line {lookahead.line})")
 
 
-def p_while_statement(p):
-    """while_statement : WHILE LPAREN expression RPAREN LBRACE statement_list RBRACE"""
-    p[0] = ASTNode('WhileStatement', condition=p[3], body=p[6])
+def parse(code: str, include_items: bool = False):
+    table = _get_table()
+    action_table = table['action_table']
+    goto_table = table['goto_table']
+    productions = table['productions']
+    states_payload = {state['id']: state for state in table['states']}
 
+    token_stream: List[Token | _EndToken] = list(tokenize_objects(code))
+    token_stream.append(_EndToken())
 
-def p_print_statement(p):
-    """print_statement : PRINT LPAREN expression RPAREN SEMICOLON"""
-    p[0] = ASTNode('PrintStatement', value=p[3])
+    state_stack: List[int] = [0]
+    value_stack: List[Any] = []
+    token_index = 0
+    parse_trace: List[Dict[str, Any]] = []
 
+    while True:
+        current_state = state_stack[-1]
+        lookahead = token_stream[token_index]
 
-def p_expression_binop(p):
-    """expression : expression PLUS expression
-                  | expression MINUS expression
-                  | expression TIMES expression
-                  | expression DIVIDE expression
-                  | expression MODULO expression
-                  | expression EQ expression
-                  | expression NE expression
-                  | expression LT expression
-                  | expression GT expression
-                  | expression LE expression
-                  | expression GE expression"""
-    p[0] = ASTNode('BinaryOp', operator=p[2], left=p[1], right=p[3])
+        action = action_table.get(str(current_state), {}).get(lookahead.token_type)
+        if action is None:
+            _syntax_error(lookahead)
 
+        parse_trace.append(
+            {
+                'state': current_state,
+                'lookahead': {
+                    'type': lookahead.token_type,
+                    'value': str(lookahead.value),
+                    'line': lookahead.line,
+                    'position': lookahead.position,
+                },
+                'action': action.get('repr', action.get('type', '')),
+                'items': states_payload[current_state]['items'],
+            }
+        )
 
-def p_expression_group(p):
-    """expression : LPAREN expression RPAREN"""
-    p[0] = p[2]
+        action_type = action['type']
+        if action_type == 'shift':
+            state_stack.append(action['to_state'])
+            value_stack.append(_shift_value(lookahead))
+            token_index += 1
+            continue
 
+        if action_type == 'reduce':
+            production_index = action['production']
+            production = productions[production_index]
+            right_hand_side_length = len(production['rhs'])
+            reduced_values = value_stack[-right_hand_side_length:] if right_hand_side_length else []
 
-def p_expression_number(p):
-    """expression : NUMBER"""
-    p[0] = ASTNode('Number', value=p[1])
+            if right_hand_side_length:
+                del state_stack[-right_hand_side_length:]
+                del value_stack[-right_hand_side_length:]
 
+            reduced_node = _reduce_semantic(production_index, reduced_values)
+            goto_state = goto_table[str(state_stack[-1])].get(production['lhs'])
+            if goto_state is None:
+                raise RuntimeError(
+                    f"Parser goto missing for state={state_stack[-1]} lhs={production['lhs']}"
+                )
 
-def p_expression_id(p):
-    """expression : ID"""
-    p[0] = ASTNode('Identifier', name=p[1])
+            state_stack.append(goto_state)
+            value_stack.append(reduced_node)
+            continue
 
+        if action_type == 'accept':
+            if not value_stack:
+                return None
+            synthesized_tree = value_stack[-1]
+            synthesized_tree_dict = (
+                synthesized_tree.to_dict() if isinstance(synthesized_tree, ASTNode) else synthesized_tree
+            )
+            if include_items:
+                return {
+                    'parse_tree': synthesized_tree_dict,
+                    'parse_items': parse_trace,
+                }
+            return synthesized_tree_dict
 
-def p_error(p):
-    if p:
-        error_msg = f"Syntax error at '{p.value}' (line {p.lineno})"
-    else:
-        error_msg = "Unexpected end of file"
-    
-    raise SyntaxError(error_msg)
-
-
-def build_parser():
-    return yacc.yacc()
-
-
-def parse(code):
-    from .lexer import build_lexer
-    
-    lexer = build_lexer()
-    parser = build_parser()
-    
-    ast = parser.parse(code, lexer=lexer)
-    
-    return ast.to_dict() if ast else None
+        raise RuntimeError(f"Unsupported parser action: {action_type}")

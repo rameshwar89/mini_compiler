@@ -58,11 +58,11 @@ export default function LR1TableViewer() {
 
   const { grammar, productions, states, summary, conflicts } = lr1Data;
 
-  const renderSummary = () => (
+  const renderFirstFollow = () => (
     <div className="h-full overflow-y-auto space-y-4">
       {/* Grammar Info */}
       <div className="bg-gray-700 rounded-lg p-4">
-        <h3 className="font-semibold text-blue-400 mb-3">📋 Grammar Info</h3>
+        <h3 className="font-semibold text-blue-400 mb-3">FIRST/FOLLOW and Grammar</h3>
         <div className="space-y-2 text-sm">
           <div>
             <span className="text-gray-400">Start Symbol:</span>
@@ -80,12 +80,15 @@ export default function LR1TableViewer() {
             <span className="text-gray-400">Non-terminals:</span>
             <span className="text-yellow-400 ml-2">{grammar.nonterminals.length}</span>
           </div>
+          <div className="pt-2 border-t border-gray-600 text-gray-400 text-xs">
+            FIRST and FOLLOW sets are used internally while building closure items and ACTION/GOTO parse table entries.
+          </div>
         </div>
       </div>
 
       {/* Summary Stats */}
       <div className="bg-gray-700 rounded-lg p-4">
-        <h3 className="font-semibold text-blue-400 mb-3">📊 LR(1) Table Summary</h3>
+        <h3 className="font-semibold text-blue-400 mb-3">Closure and Items Summary</h3>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-gray-400">Total States:</span>
@@ -104,7 +107,7 @@ export default function LR1TableViewer() {
           <div className="flex justify-between border-t border-gray-600 pt-2">
             <span className="text-gray-400">LR(1) Grammar:</span>
             <span className={summary.is_lr1 ? 'text-green-400 font-semibold' : 'text-red-400 font-semibold'}>
-              {summary.is_lr1 ? '✓ Yes' : '✗ No'}
+              {summary.is_lr1 ? 'Yes' : 'No'}
             </span>
           </div>
         </div>
@@ -112,7 +115,7 @@ export default function LR1TableViewer() {
 
       {/* Productions List */}
       <div className="bg-gray-700 rounded-lg p-4">
-        <h3 className="font-semibold text-blue-400 mb-3">📝 Productions ({productions.length})</h3>
+        <h3 className="font-semibold text-blue-400 mb-3">Productions ({productions.length})</h3>
         <div className="space-y-1 max-h-48 overflow-y-auto text-xs">
           {productions.map((prod) => (
             <div key={prod.id} className="font-mono text-gray-300">
@@ -124,7 +127,7 @@ export default function LR1TableViewer() {
     </div>
   );
 
-  const renderStates = () => (
+  const renderClosureItems = () => (
     <div className="h-full flex flex-col gap-4">
       {/* State Selector */}
       <div className="flex gap-2 flex-wrap">
@@ -148,9 +151,7 @@ export default function LR1TableViewer() {
       <div className="flex-1 overflow-y-auto bg-gray-700 rounded-lg p-4">
         {states[selectedState] && (
           <>
-            <h3 className="font-semibold text-blue-400 mb-3">
-              State {selectedState} - LR(1) Items
-            </h3>
+            <h3 className="font-semibold text-blue-400 mb-3">State {selectedState} - Closure Items</h3>
             <div className="space-y-2 text-xs">
               {states[selectedState].items.map((item, idx) => (
                 <div
@@ -185,7 +186,7 @@ export default function LR1TableViewer() {
     </div>
   );
 
-  const renderTable = () => (
+  const renderParseTable = () => (
     <div className="h-full overflow-x-auto overflow-y-auto">
       <table className="text-xs border-collapse bg-gray-700 rounded-lg overflow-hidden">
         <thead className="bg-gray-800 sticky top-0">
@@ -240,19 +241,18 @@ export default function LR1TableViewer() {
     </div>
   );
 
-  const renderConflicts = () => (
+  const renderItemConflicts = () => (
     <div className="h-full overflow-y-auto space-y-4">
       {conflicts.length === 0 ? (
         <div className="flex items-center justify-center h-full">
           <div className="text-green-400 text-center">
-            <div className="text-2xl mb-2">✓</div>
             <div>No conflicts! Grammar is LR(1)</div>
           </div>
         </div>
       ) : (
         <>
           <div className="bg-red-900/20 border border-red-500 rounded-lg p-4">
-            <h3 className="font-semibold text-red-400 mb-2">⚠️ Conflicts Found ({conflicts.length})</h3>
+            <h3 className="font-semibold text-red-400 mb-2">Conflicts Found ({conflicts.length})</h3>
             <p className="text-xs text-gray-400 mb-4">
               The grammar has conflicts that make it not strictly LR(1).
             </p>
@@ -291,10 +291,10 @@ export default function LR1TableViewer() {
       {/* View Mode Tabs */}
       <div className="flex gap-1 mb-4 border-b border-gray-700 overflow-x-auto pb-2 flex-shrink-0">
         {[
-          { id: 'summary', label: '📊 Summary', icon: '' },
-          { id: 'states', label: '🔍 States', icon: '' },
-          { id: 'table', label: '📋 TABLE', icon: '' },
-          { id: 'conflicts', label: '⚠️ Conflicts', icon: '' },
+          { id: 'summary', label: 'FIRST/FOLLOW' },
+          { id: 'states', label: 'Closure Items' },
+          { id: 'table', label: 'Parse Table' },
+          { id: 'conflicts', label: 'Conflicts' },
         ].map((mode) => (
           <button
             key={mode.id}
@@ -312,10 +312,10 @@ export default function LR1TableViewer() {
 
       {/* Content */}
       <div className="flex-1 overflow-hidden">
-        {viewMode === 'summary' && renderSummary()}
-        {viewMode === 'states' && renderStates()}
-        {viewMode === 'table' && renderTable()}
-        {viewMode === 'conflicts' && renderConflicts()}
+        {viewMode === 'summary' && renderFirstFollow()}
+        {viewMode === 'states' && renderClosureItems()}
+        {viewMode === 'table' && renderParseTable()}
+        {viewMode === 'conflicts' && renderItemConflicts()}
       </div>
     </div>
   );

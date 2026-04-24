@@ -6,7 +6,7 @@ from compiler.lexer import tokenize
 from compiler.parser import parse
 from compiler.intermediate import generate_intermediate_code
 from compiler.executor import execute_code
-from compiler.lr1 import build_mini_language_lr1_table
+from compiler.parser import build_mini_language_lr1_table
 
 app = Flask(__name__)
 CORS(app)
@@ -37,18 +37,18 @@ def lr1_table():
             'success': True,
             'lr1': table
         })
-    except Exception as e:
+    except Exception as error:
         traceback.print_exc()
         return jsonify({
             'success': False,
-            'error': f'Failed to build LR(1) table: {str(e)}'
+            'error': f'Failed to build LR(1) table: {str(error)}'
         }), 500
 
 @app.route('/api/compile', methods=['POST'])
 def compile_code():
     try:
-        data = request.get_json()
-        source_code = data.get('code', '')
+        request_payload = request.get_json()
+        source_code = request_payload.get('code', '')
         
         if not source_code.strip():
             return jsonify({
@@ -59,60 +59,63 @@ def compile_code():
         result = {
             'success': True,
             'tokens': [],
-            'ast': None,
+            'parse_tree': None,
+            'parse_items': [],
             'intermediate': [],
             'output': {}
         }
         
         try:
             result['tokens'] = tokenize(source_code)
-        except Exception as e:
+        except Exception as error:
             return jsonify({
                 'success': False,
-                'error': f'Lexical error: {str(e)}',
+                'error': f'Lexical error: {str(error)}',
                 'stage': 'tokenization'
             }), 400
         
         try:
-            result['ast'] = parse(source_code)
-        except Exception as e:
+            parsed = parse(source_code, include_items=True)
+            result['parse_tree'] = parsed.get('parse_tree')
+            result['parse_items'] = parsed['parse_items']
+        except Exception as error:
             return jsonify({
                 'success': False,
-                'error': f'Syntax error: {str(e)}',
+                'error': f'Syntax error: {str(error)}',
                 'stage': 'parsing',
                 'tokens': result['tokens']
             }), 400
         
         try:
-            result['intermediate'] = generate_intermediate_code(result['ast'])
-        except Exception as e:
+            result['intermediate'] = generate_intermediate_code(result['parse_tree'])
+        except Exception as error:
             return jsonify({
                 'success': False,
-                'error': f'Code generation error: {str(e)}',
+                'error': f'Code generation error: {str(error)}',
                 'stage': 'intermediate',
                 'tokens': result['tokens'],
-                'ast': result['ast']
+                'parse_tree': result['parse_tree']
             }), 400
         
         try:
             result['output'] = execute_code(result['intermediate'])
-        except Exception as e:
+        except Exception as error:
             return jsonify({
                 'success': False,
-                'error': f'Execution error: {str(e)}',
+                'error': f'Execution error: {str(error)}',
                 'stage': 'execution',
                 'tokens': result['tokens'],
-                'ast': result['ast'],
+                'parse_tree': result['parse_tree'],
                 'intermediate': result['intermediate']
             }), 400
         
         return jsonify(result)
     
-    except Exception as e:
+    except Exception as error:
         traceback.print_exc()
         return jsonify({
             'success': False,
-            'error': f'Server error: {str(e)}'
+            'error': f'Server error: {str(error)}'
         }), 500
 
 if __name__ == '__main__':
