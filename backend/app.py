@@ -6,7 +6,7 @@ from compiler.lexer import tokenize
 from compiler.parser import parse
 from compiler.intermediate import generate_intermediate_code
 from compiler.executor import execute_code
-from compiler.parser import build_mini_language_lr1_table
+from compiler.lr1_table import build_mini_language_lr1_table
 
 app = Flask(__name__)
 CORS(app)

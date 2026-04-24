@@ -2,7 +2,7 @@ from .lexer import tokenize
 from .parser import parse
 from .intermediate import generate_intermediate_code
 from .executor import execute_code
-from .parser import build_mini_language_lr1_table
+from .lr1_table import build_mini_language_lr1_table
 
 __all__ = [
 	'tokenize',

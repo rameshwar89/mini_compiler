@@ -22,3 +22,115 @@ body {
   padding: 0;
   margin: 0;
 }
+
+.parse-tree-root,
+.parse-tree-children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.parse-tree-root {
+  padding-left: 2px;
+}
+
+.parse-tree-children {
+  margin-left: 14px;
+  padding-left: 18px;
+  border-left: 1px dashed rgba(100, 116, 139, 0.5);
+}
+
+.parse-tree-item {
+  position: relative;
+  margin-top: 8px;
+}
+
+.parse-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.parse-tree-caret {
+  width: 20px;
+  height: 20px;
+  border: 1px solid rgba(71, 85, 105, 0.8);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.85);
+  color: rgb(148, 163, 184);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.parse-tree-caret.is-clickable {
+  cursor: pointer;
+}
+
+.parse-tree-caret.is-clickable:hover {
+  border-color: rgba(59, 130, 246, 0.9);
+  color: rgb(147, 197, 253);
+}
+
+.parse-tree-caret.is-spacer {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.parse-tree-label {
+  min-width: 60px;
+  color: rgb(148, 163, 184);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.parse-tree-node-card {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(71, 85, 105, 0.75);
+  border-radius: 10px;
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.95), rgba(2, 6, 23, 0.9));
+  padding: 6px 10px;
+}
+
+.parse-tree-title {
+  color: rgb(125, 211, 252);
+  font-weight: 700;
+}
+
+.parse-tree-meta-pill {
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  line-height: 1.25;
+  border: 1px solid transparent;
+}
+
+.parse-tree-meta-pill.tone-emerald {
+  color: rgb(52, 211, 153);
+  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(6, 78, 59, 0.35);
+}
+
+.parse-tree-meta-pill.tone-violet {
+  color: rgb(196, 181, 253);
+  border-color: rgba(139, 92, 246, 0.45);
+  background: rgba(76, 29, 149, 0.28);
+}
+
+.parse-tree-meta-pill.tone-amber {
+  color: rgb(252, 211, 77);
+  border-color: rgba(245, 158, 11, 0.45);
+  background: rgba(120, 53, 15, 0.3);
+}
+
+.parse-tree-meta-pill.tone-slate {
+  color: rgb(203, 213, 225);
+  border-color: rgba(100, 116, 139, 0.45);
+  background: rgba(30, 41, 59, 0.5);
+}

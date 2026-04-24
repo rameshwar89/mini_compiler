@@ -1,74 +1,129 @@
 'use client';
 
+import { useMemo, useState } from 'react';
+
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 const NODE_META_KEYS = new Set(['type', 'value', 'name', 'operator', 'line', 'position']);
 
 function PrimitiveValue({ value }) {
-  return <span className="text-green-400">{String(value)}</span>;
+  return <span className="text-emerald-300">{String(value)}</span>;
 }
 
-function NodeHeader({ node }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-blue-400 font-semibold">{node.type || 'Node'}</span>
-      {node.name !== undefined && <span className="text-purple-400">name={String(node.name)}</span>}
-      {node.value !== undefined && <span className="text-green-400">value={String(node.value)}</span>}
-      {node.operator !== undefined && <span className="text-orange-400">op={String(node.operator)}</span>}
-      {node.line !== undefined && node.position !== undefined && (
-        <span className="text-gray-500 text-xs">@ {node.line}:{node.position}</span>
-      )}
-    </div>
-  );
+function nodeTitle(node) {
+  if (Array.isArray(node)) return 'List';
+  if (!isObject(node)) return 'Literal';
+  return node.type || 'Node';
 }
 
-function RenderTree({ label, node, path = 'root', depth = 0 }) {
-  const marginLeft = depth * 16;
+function nodeMeta(node) {
+  if (!isObject(node)) return [];
 
+  const meta = [];
+  if (node.name !== undefined) meta.push({ key: 'name', value: String(node.name), tone: 'violet' });
+  if (node.value !== undefined) meta.push({ key: 'value', value: String(node.value), tone: 'emerald' });
+  if (node.operator !== undefined) meta.push({ key: 'op', value: String(node.operator), tone: 'amber' });
+  if (node.line !== undefined && node.position !== undefined) {
+    meta.push({ key: 'at', value: `${node.line}:${node.position}`, tone: 'slate' });
+  }
+
+  return meta;
+}
+
+function getChildren(node, path) {
   if (Array.isArray(node)) {
-    return (
-      <div className="my-1" style={{ marginLeft }}>
-        {label && <div className="text-gray-400 text-xs uppercase mb-1">{label}</div>}
-        {node.length === 0 ? (
-          <div className="text-gray-500 text-xs">(empty)</div>
-        ) : (
-          node.map((item, index) => (
-            <RenderTree
-              key={`${path}[${index}]`}
-              label={`[${index}]`}
-              node={item}
-              path={`${path}[${index}]`}
-              depth={depth + 1}
-            />
-          ))
-        )}
-      </div>
-    );
+    return node.map((item, index) => ({
+      label: `[${index}]`,
+      value: item,
+      path: `${path}[${index}]`
+    }));
   }
 
   if (!isObject(node)) {
-    return (
-      <div className="my-1" style={{ marginLeft }}>
-        {label && <span className="text-gray-400 text-xs uppercase mr-2">{label}:</span>}
-        <PrimitiveValue value={node} />
-      </div>
-    );
+    return [];
   }
 
-  const childEntries = Object.entries(node).filter(([key]) => !NODE_META_KEYS.has(key));
+  return Object.entries(node)
+    .filter(([key]) => !NODE_META_KEYS.has(key))
+    .map(([key, value]) => ({
+      label: key,
+      value,
+      path: `${path}.${key}`
+    }));
+}
+
+function TreeNode({ label, node, path, collapsed, onToggle }) {
+  const children = useMemo(() => getChildren(node, path), [node, path]);
+  const hasChildren = children.length > 0;
+  const isCollapsed = collapsed.has(path);
+  const isLiteral = !Array.isArray(node) && !isObject(node);
 
   return (
-    <div className="my-1" style={{ marginLeft }}>
-      {label && <div className="text-gray-400 text-xs uppercase mb-1">{label}</div>}
-      <NodeHeader node={node} />
-      {childEntries.map(([key, value]) => (
-        <RenderTree key={`${path}.${key}`} label={key} node={value} path={`${path}.${key}`} depth={depth + 1} />
-      ))}
-    </div>
+    <li className="parse-tree-item">
+      <div className="parse-tree-row">
+        <button
+          type="button"
+          onClick={() => hasChildren && onToggle(path)}
+          className={`parse-tree-caret ${hasChildren ? 'is-clickable' : 'is-spacer'}`}
+          aria-label={hasChildren ? (isCollapsed ? 'Expand node' : 'Collapse node') : 'Leaf node'}
+        >
+          {hasChildren ? (isCollapsed ? '▸' : '▾') : '•'}
+        </button>
+
+        {label && <span className="parse-tree-label">{label}</span>}
+
+        <div className="parse-tree-node-card">
+          <span className="parse-tree-title">{nodeTitle(node)}</span>
+
+          {isLiteral ? (
+            <span className="parse-tree-meta-pill tone-emerald">
+              <PrimitiveValue value={node} />
+            </span>
+          ) : (
+            <>
+              {nodeMeta(node).map((entry) => (
+                <span key={`${path}-${entry.key}-${entry.value}`} className={`parse-tree-meta-pill tone-${entry.tone}`}>
+                  {entry.key}={entry.value}
+                </span>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
+
+      {hasChildren && !isCollapsed && (
+        <ul className="parse-tree-children">
+          {children.map((child) => (
+            <TreeNode
+              key={child.path}
+              label={child.label}
+              node={child.value}
+              path={child.path}
+              collapsed={collapsed}
+              onToggle={onToggle}
+            />
+          ))}
+        </ul>
+      )}
+    </li>
   );
 }
 
 export default function ParseTreeViewer({ parseTree }) {
+  const [collapsed, setCollapsed] = useState(new Set());
+
+  const toggleCollapse = (path) => {
+    setCollapsed((previous) => {
+      const next = new Set(previous);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  };
+
   if (!parseTree) {
     return (
       <div className="text-gray-500 italic text-sm">
@@ -78,8 +133,10 @@ export default function ParseTreeViewer({ parseTree }) {
   }
 
   return (
-    <div className="font-mono text-sm h-full overflow-auto bg-gray-900/50 p-4 rounded">
-      <RenderTree node={parseTree} />
+    <div className="parse-tree-viewer h-full overflow-auto rounded-lg border border-slate-700/80 bg-slate-950/70 p-4 font-mono text-sm">
+      <ul className="parse-tree-root">
+        <TreeNode node={parseTree} path="root" collapsed={collapsed} onToggle={toggleCollapse} />
+      </ul>
     </div>
   );
 }
