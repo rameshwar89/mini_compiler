@@ -35,6 +35,7 @@ export default function Home() {
   const [dividerPosition, setDividerPosition] = useState(50);
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef(null);
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
   const handleDividerMouseDown = () => {
     setIsDragging(true);
@@ -73,7 +74,7 @@ export default function Home() {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:5000/api/compile', {
+      const response = await fetch(`${apiBaseUrl}/api/compile`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
