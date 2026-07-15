@@ -31,12 +31,12 @@ body {
 }
 
 .parse-tree-root {
-  padding-left: 2px;
+  padding-left: 0;
 }
 
 .parse-tree-children {
-  margin-left: 14px;
-  padding-left: 18px;
+  margin-left: 10px;
+  padding-left: 20px;
   border-left: 1px dashed rgba(100, 116, 139, 0.5);
 }
 
@@ -45,10 +45,28 @@ body {
   margin-top: 8px;
 }
 
+.parse-tree-item::before {
+  content: '';
+  position: absolute;
+  left: -20px;
+  top: 19px;
+  width: 14px;
+  border-top: 1px dashed rgba(100, 116, 139, 0.5);
+}
+
+.parse-tree-item.is-root::before {
+  display: none;
+}
+
 .parse-tree-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.parse-tree-item:last-child > .parse-tree-children {
+  border-left-color: transparent;
 }
 
 .parse-tree-caret {

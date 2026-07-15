@@ -20,7 +20,7 @@ export default function LR1TableViewer() {
           setLr1Data(data.lr1);
           setError('');
         } else {
-          setError(data.error || 'Failed to fetch LR(1) table');
+          setError(data.error || 'Failed to fetch SLR(1) table');
         }
       } catch (err) {
         setError(`Failed to connect to backend: ${err.message}`);
@@ -35,7 +35,7 @@ export default function LR1TableViewer() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-gray-400">Loading LR(1) parsing table...</div>
+        <div className="text-gray-400">Loading SLR(1) parsing table...</div>
       </div>
     );
   }
@@ -51,12 +51,12 @@ export default function LR1TableViewer() {
   if (!lr1Data) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-gray-400">No LR(1) data available</div>
+        <div className="text-gray-400">No SLR(1) data available</div>
       </div>
     );
   }
 
-  const { grammar, productions, states, summary, conflicts } = lr1Data;
+  const { grammar, productions, states, summary, conflicts, first_sets, follow_sets } = lr1Data;
 
   const renderFirstFollow = () => (
     <div className="h-full overflow-y-auto space-y-4">
@@ -81,14 +81,42 @@ export default function LR1TableViewer() {
             <span className="text-yellow-400 ml-2">{grammar.nonterminals.length}</span>
           </div>
           <div className="pt-2 border-t border-gray-600 text-gray-400 text-xs">
-            FIRST and FOLLOW sets are used internally while building closure items and ACTION/GOTO parse table entries.
+            FIRST and FOLLOW sets are used to build SLR(1) ACTION/GOTO entries.
           </div>
+        </div>
+      </div>
+
+      {/* FIRST Sets */}
+      <div className="bg-gray-700 rounded-lg p-4">
+        <h3 className="font-semibold text-blue-400 mb-3">FIRST Sets</h3>
+        <div className="space-y-1 max-h-56 overflow-y-auto text-xs font-mono">
+          {Object.entries(first_sets || {})
+            .sort(([left], [right]) => left.localeCompare(right))
+            .map(([symbol, values]) => (
+              <div key={`first-${symbol}`} className="text-gray-300">
+                <span className="text-cyan-300">FIRST({symbol})</span> = {'{ ' + values.join(', ') + ' }'}
+              </div>
+            ))}
+        </div>
+      </div>
+
+      {/* FOLLOW Sets */}
+      <div className="bg-gray-700 rounded-lg p-4">
+        <h3 className="font-semibold text-blue-400 mb-3">FOLLOW Sets</h3>
+        <div className="space-y-1 max-h-56 overflow-y-auto text-xs font-mono">
+          {Object.entries(follow_sets || {})
+            .sort(([left], [right]) => left.localeCompare(right))
+            .map(([symbol, values]) => (
+              <div key={`follow-${symbol}`} className="text-gray-300">
+                <span className="text-emerald-300">FOLLOW({symbol})</span> = {'{ ' + values.join(', ') + ' }'}
+              </div>
+            ))}
         </div>
       </div>
 
       {/* Summary Stats */}
       <div className="bg-gray-700 rounded-lg p-4">
-        <h3 className="font-semibold text-blue-400 mb-3">Closure and Items Summary</h3>
+        <h3 className="font-semibold text-blue-400 mb-3">GOTO and Items Summary</h3>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-gray-400">Total States:</span>
@@ -105,7 +133,7 @@ export default function LR1TableViewer() {
             </span>
           </div>
           <div className="flex justify-between border-t border-gray-600 pt-2">
-            <span className="text-gray-400">LR(1) Grammar:</span>
+            <span className="text-gray-400">SLR(1) Grammar:</span>
             <span className={summary.is_lr1 ? 'text-green-400 font-semibold' : 'text-red-400 font-semibold'}>
               {summary.is_lr1 ? 'Yes' : 'No'}
             </span>
@@ -127,7 +155,7 @@ export default function LR1TableViewer() {
     </div>
   );
 
-  const renderClosureItems = () => (
+  const renderGotoItems = () => (
     <div className="h-full flex flex-col gap-4">
       {/* State Selector */}
       <div className="flex gap-2 flex-wrap">
@@ -151,7 +179,7 @@ export default function LR1TableViewer() {
       <div className="flex-1 overflow-y-auto bg-gray-700 rounded-lg p-4">
         {states[selectedState] && (
           <>
-            <h3 className="font-semibold text-blue-400 mb-3">State {selectedState} - Closure Items</h3>
+            <h3 className="font-semibold text-blue-400 mb-3">State {selectedState} - LR(0) Items and GOTO</h3>
             <div className="space-y-2 text-xs">
               {states[selectedState].items.map((item, idx) => (
                 <div
@@ -169,7 +197,7 @@ export default function LR1TableViewer() {
             {/* Transitions */}
             {Object.keys(states[selectedState].transitions).length > 0 && (
               <div className="mt-4 pt-4 border-t border-gray-600">
-                <h4 className="font-semibold text-green-400 mb-2">Transitions</h4>
+                <h4 className="font-semibold text-green-400 mb-2">GOTO Transitions</h4>
                 <div className="space-y-1 text-xs">
                   {Object.entries(states[selectedState].transitions).map(([symbol, target]) => (
                     <div key={symbol} className="font-mono text-gray-300">
@@ -254,7 +282,7 @@ export default function LR1TableViewer() {
           <div className="bg-red-900/20 border border-red-500 rounded-lg p-4">
             <h3 className="font-semibold text-red-400 mb-2">Conflicts Found ({conflicts.length})</h3>
             <p className="text-xs text-gray-400 mb-4">
-              The grammar has conflicts that make it not strictly LR(1).
+              The grammar has conflicts that make it not strictly SLR(1).
             </p>
           </div>
 
@@ -292,7 +320,7 @@ export default function LR1TableViewer() {
       <div className="flex gap-1 mb-4 border-b border-gray-700 overflow-x-auto pb-2 flex-shrink-0">
         {[
           { id: 'summary', label: 'FIRST/FOLLOW' },
-          { id: 'states', label: 'Closure Items' },
+          { id: 'states', label: 'GOTO Items' },
           { id: 'table', label: 'Parse Table' },
           { id: 'conflicts', label: 'Conflicts' },
         ].map((mode) => (
@@ -313,7 +341,7 @@ export default function LR1TableViewer() {
       {/* Content */}
       <div className="flex-1 overflow-hidden">
         {viewMode === 'summary' && renderFirstFollow()}
-        {viewMode === 'states' && renderClosureItems()}
+        {viewMode === 'states' && renderGotoItems()}
         {viewMode === 'table' && renderParseTable()}
         {viewMode === 'conflicts' && renderItemConflicts()}
       </div>

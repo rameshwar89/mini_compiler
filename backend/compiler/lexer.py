@@ -141,6 +141,5 @@ def tokenize(code: str):
     ]
 
 
-# Backward compatibility for existing imports.
 tokens = TOKEN_TYPES
 reserved = RESERVED_KEYWORDS
