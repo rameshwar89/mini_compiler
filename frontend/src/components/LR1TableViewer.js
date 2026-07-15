@@ -8,12 +8,13 @@ export default function LR1TableViewer() {
   const [error, setError] = useState('');
   const [selectedState, setSelectedState] = useState(0);
   const [viewMode, setViewMode] = useState('summary'); // 'summary', 'states', 'table', 'conflicts'
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
   useEffect(() => {
     const fetchLR1Table = async () => {
       try {
         setLoading(true);
-        const response = await fetch('http://localhost:5000/api/lr1-table');
+        const response = await fetch(`${apiBaseUrl}/api/lr1-table`);
         const data = await response.json();
 
         if (data.success) {
@@ -30,7 +31,7 @@ export default function LR1TableViewer() {
     };
 
     fetchLR1Table();
-  }, []);
+  }, [apiBaseUrl]);
 
   if (loading) {
     return (
